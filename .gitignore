@@ -1,5 +1,6 @@
-# Output folder - contains converted documents
+# Output folders - contains converted documents
 output/
+test_output/
 
 # Python
 __pycache__/
