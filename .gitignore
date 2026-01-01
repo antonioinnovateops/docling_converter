@@ -11,6 +11,12 @@ __pycache__/
 .eggs/
 dist/
 build/
+src/*.egg-info/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Virtual environments
 venv/

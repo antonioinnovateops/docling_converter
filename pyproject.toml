@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docling-converter"
+version = "0.1.0"
+description = "Convert PDFs to Markdown for Claude knowledge bases and Obsidian vaults"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "Antonio InnovateOps", email = "antonio@innovateops.dev"}
+]
+keywords = [
+    "pdf",
+    "markdown",
+    "docling",
+    "claude",
+    "obsidian",
+    "rag",
+    "knowledge-base",
+    "document-conversion",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "docling>=2.0.0",
+    "docling-core>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/antonioinnovateops/docling_converter"
+Repository = "https://github.com/antonioinnovateops/docling_converter"
+Issues = "https://github.com/antonioinnovateops/docling_converter/issues"
+
+[project.scripts]
+docling-converter = "docling_converter.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+docling_converter = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

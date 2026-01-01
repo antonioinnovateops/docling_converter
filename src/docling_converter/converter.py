@@ -1,17 +1,11 @@
-#!/usr/bin/env python3
 """
-PDF to Markdown Converter with Image Extraction
-================================================
-Converts PDFs to Markdown with all artifacts (images, tables)
-using relative paths - perfect for Claude knowledge bases and Obsidian vaults.
-
-Usage:
-    python pdf_to_markdown.py <input_pdf> [output_dir]
+Core PDF to Markdown converter module.
 """
 
-import sys
-import os
+import re
 from pathlib import Path
+from typing import Optional, List
+
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import InputFormat
@@ -20,8 +14,10 @@ from docling.document_converter import PdfFormatOption
 
 def convert_pdf_to_markdown(
     pdf_path: str,
-    output_dir: str = None,
-    extract_images: bool = True
+    output_dir: Optional[str] = None,
+    extract_images: bool = True,
+    ocr: bool = True,
+    image_scale: float = 2.0,
 ) -> str:
     """
     Convert a PDF to Markdown with images extracted to relative paths.
@@ -30,6 +26,8 @@ def convert_pdf_to_markdown(
         pdf_path: Path to the input PDF file
         output_dir: Output directory (defaults to same as PDF)
         extract_images: Whether to extract and save images
+        ocr: Enable OCR for scanned content
+        image_scale: Scale factor for extracted images
 
     Returns:
         Path to the generated Markdown file
@@ -58,17 +56,15 @@ def convert_pdf_to_markdown(
 
     # Configure pipeline for best quality
     pipeline_options = PdfPipelineOptions()
-    pipeline_options.do_ocr = True  # Enable OCR for scanned content
-    pipeline_options.do_table_structure = True  # Preserve tables
-    pipeline_options.images_scale = 2.0  # Higher resolution images
-    pipeline_options.generate_picture_images = True  # Extract images
+    pipeline_options.do_ocr = ocr
+    pipeline_options.do_table_structure = True
+    pipeline_options.images_scale = image_scale
+    pipeline_options.generate_picture_images = True
 
     # Create converter with PDF options
     converter = DocumentConverter(
         format_options={
-            InputFormat.PDF: PdfFormatOption(
-                pipeline_options=pipeline_options
-            )
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
         }
     )
 
@@ -79,11 +75,11 @@ def convert_pdf_to_markdown(
     # Export to markdown
     markdown_content = result.document.export_to_markdown()
 
-    # Save images and update references
+    # Save images
     image_count = 0
-    if extract_images and hasattr(result.document, 'pictures'):
+    if extract_images and hasattr(result.document, "pictures"):
         for idx, picture in enumerate(result.document.pictures):
-            if hasattr(picture, 'image') and picture.image is not None:
+            if hasattr(picture, "image") and picture.image is not None:
                 img_filename = f"image_{idx:03d}.png"
                 img_path = assets_dir / img_filename
                 picture.image.pil_image.save(str(img_path))
@@ -92,8 +88,7 @@ def convert_pdf_to_markdown(
     print(f"Extracted {image_count} images")
 
     # Replace <!-- image --> placeholders with actual image references
-    import re
-    image_placeholder_pattern = r'<!-- image -->'
+    image_placeholder_pattern = r"<!-- image -->"
     image_idx = 0
 
     def replace_image_placeholder(match):
@@ -108,14 +103,12 @@ def convert_pdf_to_markdown(
         return match.group(0)
 
     markdown_content = re.sub(
-        image_placeholder_pattern,
-        replace_image_placeholder,
-        markdown_content
+        image_placeholder_pattern, replace_image_placeholder, markdown_content
     )
 
     # Save markdown file
     md_path = output_dir / f"{doc_name}.md"
-    with open(md_path, 'w', encoding='utf-8') as f:
+    with open(md_path, "w", encoding="utf-8") as f:
         f.write(markdown_content)
 
     print(f"Markdown saved: {md_path}")
@@ -123,13 +116,20 @@ def convert_pdf_to_markdown(
     return str(md_path)
 
 
-def batch_convert(input_dir: str, output_dir: str = None) -> list:
+def batch_convert(
+    input_dir: str,
+    output_dir: Optional[str] = None,
+    ocr: bool = True,
+    image_scale: float = 2.0,
+) -> List[str]:
     """
     Convert all PDFs in a directory.
 
     Args:
         input_dir: Directory containing PDFs
         output_dir: Output directory for all conversions
+        ocr: Enable OCR for scanned content
+        image_scale: Scale factor for extracted images
 
     Returns:
         List of generated Markdown file paths
@@ -146,28 +146,11 @@ def batch_convert(input_dir: str, output_dir: str = None) -> list:
 
     for pdf_file in pdf_files:
         try:
-            md_path = convert_pdf_to_markdown(str(pdf_file), output_dir)
+            md_path = convert_pdf_to_markdown(
+                str(pdf_file), output_dir, ocr=ocr, image_scale=image_scale
+            )
             results.append(md_path)
         except Exception as e:
             print(f"Error converting {pdf_file.name}: {e}")
 
     return results
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python pdf_to_markdown.py <input_pdf> [output_dir]")
-        print("       python pdf_to_markdown.py --batch <input_dir> [output_dir]")
-        sys.exit(1)
-
-    if sys.argv[1] == "--batch":
-        if len(sys.argv) < 3:
-            print("Usage: python pdf_to_markdown.py --batch <input_dir> [output_dir]")
-            sys.exit(1)
-        input_dir = sys.argv[2]
-        output_dir = sys.argv[3] if len(sys.argv) > 3 else None
-        batch_convert(input_dir, output_dir)
-    else:
-        pdf_path = sys.argv[1]
-        output_dir = sys.argv[2] if len(sys.argv) > 2 else None
-        convert_pdf_to_markdown(pdf_path, output_dir)

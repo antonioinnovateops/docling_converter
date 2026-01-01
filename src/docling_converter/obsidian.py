@@ -1,18 +1,12 @@
-#!/usr/bin/env python3
 """
-Obsidian Vault Formatter
-========================
-Converts PDFs to Obsidian-compatible Markdown with:
-- Wiki-style links [[note]]
-- Proper image embedding ![[image.png]]
-- YAML frontmatter
-- Tags extraction
+Obsidian vault formatter module.
 """
 
-import sys
 import re
 from pathlib import Path
 from datetime import datetime
+from typing import Optional, List
+
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import InputFormat
@@ -23,7 +17,8 @@ def convert_for_obsidian(
     pdf_path: str,
     vault_path: str,
     add_frontmatter: bool = True,
-    tags: list = None
+    tags: Optional[List[str]] = None,
+    ocr: bool = True,
 ) -> str:
     """
     Convert PDF to Obsidian-compatible Markdown.
@@ -33,6 +28,7 @@ def convert_for_obsidian(
         vault_path: Path to Obsidian vault root
         add_frontmatter: Add YAML frontmatter
         tags: List of tags to add
+        ocr: Enable OCR for scanned content
 
     Returns:
         Path to generated markdown file
@@ -54,16 +50,14 @@ def convert_for_obsidian(
 
     # Configure pipeline
     pipeline_options = PdfPipelineOptions()
-    pipeline_options.do_ocr = True
+    pipeline_options.do_ocr = ocr
     pipeline_options.do_table_structure = True
     pipeline_options.images_scale = 2.0
     pipeline_options.generate_picture_images = True
 
     converter = DocumentConverter(
         format_options={
-            InputFormat.PDF: PdfFormatOption(
-                pipeline_options=pipeline_options
-            )
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
         }
     )
 
@@ -75,36 +69,39 @@ def convert_for_obsidian(
 
     # Extract and save images with Obsidian embedding
     image_count = 0
-    if hasattr(result.document, 'pictures'):
+    if hasattr(result.document, "pictures"):
         for idx, picture in enumerate(result.document.pictures):
-            if hasattr(picture, 'image') and picture.image is not None:
+            if hasattr(picture, "image") and picture.image is not None:
                 img_filename = f"{doc_name}_img_{idx:03d}.png"
                 img_path = attachments_dir / img_filename
                 picture.image.pil_image.save(str(img_path))
                 image_count += 1
 
-                # Obsidian image embedding syntax
-                obsidian_img = f"![[attachments/{doc_name}/{img_filename}]]"
-
-                if hasattr(picture, 'self_ref'):
-                    markdown_content = markdown_content.replace(
-                        str(picture.self_ref),
-                        obsidian_img
-                    )
-
     print(f"Extracted {image_count} images to attachments/")
 
-    # Convert standard markdown images to Obsidian format
-    # ![alt](path) -> ![[path]]
+    # Replace <!-- image --> with Obsidian format
+    image_idx = 0
+
+    def replace_placeholder(match):
+        nonlocal image_idx
+        img_filename = f"{doc_name}_img_{image_idx:03d}.png"
+        img_path = attachments_dir / img_filename
+        if img_path.exists():
+            obsidian_img = f"![[attachments/{doc_name}/{img_filename}]]"
+            image_idx += 1
+            return obsidian_img
+        return match.group(0)
+
+    markdown_content = re.sub(r"<!-- image -->", replace_placeholder, markdown_content)
+
+    # Convert remaining standard markdown images to Obsidian format
     markdown_content = re.sub(
-        r'!\[([^\]]*)\]\(([^)]+)\)',
-        lambda m: f"![[{m.group(2)}]]",
-        markdown_content
+        r"!\[([^\]]*)\]\(([^)]+)\)", lambda m: f"![[{m.group(2)}]]", markdown_content
     )
 
     # Add YAML frontmatter
     if add_frontmatter:
-        frontmatter = generate_frontmatter(pdf_path, tags)
+        frontmatter = _generate_frontmatter(pdf_path, tags)
         markdown_content = frontmatter + markdown_content
 
     # Add source reference at bottom
@@ -112,14 +109,14 @@ def convert_for_obsidian(
 
     # Save to vault
     md_path = vault_path / f"{doc_name}.md"
-    with open(md_path, 'w', encoding='utf-8') as f:
+    with open(md_path, "w", encoding="utf-8") as f:
         f.write(markdown_content)
 
     print(f"Saved to vault: {md_path}")
     return str(md_path)
 
 
-def generate_frontmatter(pdf_path: Path, tags: list = None) -> str:
+def _generate_frontmatter(pdf_path: Path, tags: Optional[List[str]] = None) -> str:
     """Generate YAML frontmatter for Obsidian."""
     tags = tags or ["imported", "pdf"]
 
@@ -135,8 +132,24 @@ type: reference
     return frontmatter
 
 
-def batch_import_to_vault(pdf_folder: str, vault_path: str, tags: list = None):
-    """Import all PDFs from a folder to Obsidian vault."""
+def batch_import_to_vault(
+    pdf_folder: str,
+    vault_path: str,
+    tags: Optional[List[str]] = None,
+    ocr: bool = True,
+) -> List[str]:
+    """
+    Import all PDFs from a folder to Obsidian vault.
+
+    Args:
+        pdf_folder: Directory containing PDFs
+        vault_path: Path to Obsidian vault
+        tags: Tags to add to all documents
+        ocr: Enable OCR for scanned content
+
+    Returns:
+        List of generated markdown paths
+    """
     pdf_folder = Path(pdf_folder)
     pdf_files = list(pdf_folder.glob("*.pdf"))
 
@@ -149,27 +162,23 @@ def batch_import_to_vault(pdf_folder: str, vault_path: str, tags: list = None):
 
     for pdf_file in pdf_files:
         try:
-            md_path = convert_for_obsidian(
-                str(pdf_file),
-                vault_path,
-                tags=tags
-            )
+            md_path = convert_for_obsidian(str(pdf_file), vault_path, tags=tags, ocr=ocr)
             results.append(md_path)
         except Exception as e:
             print(f"Error importing {pdf_file.name}: {e}")
 
     # Create index note
-    create_index_note(vault_path, results)
+    _create_index_note(vault_path, results)
     return results
 
 
-def create_index_note(vault_path: str, imported_files: list):
+def _create_index_note(vault_path: str, imported_files: List[str]) -> None:
     """Create an index note linking all imported documents."""
     vault_path = Path(vault_path)
 
-    index_content = """---
+    index_content = f"""---
 title: "Imported Documents Index"
-created: {date}
+created: {datetime.now().strftime("%Y-%m-%d")}
 tags: [index, moc]
 ---
 
@@ -179,26 +188,14 @@ This note links to all imported PDF documents.
 
 ## Documents
 
-""".format(date=datetime.now().strftime("%Y-%m-%d"))
+"""
 
     for file_path in imported_files:
         name = Path(file_path).stem
         index_content += f"- [[{name}]]\n"
 
     index_path = vault_path / "Imported Documents Index.md"
-    with open(index_path, 'w', encoding='utf-8') as f:
+    with open(index_path, "w", encoding="utf-8") as f:
         f.write(index_content)
 
     print(f"Created index: {index_path}")
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python obsidian_formatter.py <pdf_path> <vault_path>")
-        print("       python obsidian_formatter.py --batch <pdf_folder> <vault_path>")
-        sys.exit(1)
-
-    if sys.argv[1] == "--batch":
-        batch_import_to_vault(sys.argv[2], sys.argv[3])
-    else:
-        convert_for_obsidian(sys.argv[1], sys.argv[2])

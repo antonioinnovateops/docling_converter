@@ -1,89 +1,134 @@
-# Docling Tutorials - PDF to Markdown for Claude & Obsidian
+# Docling Converter
 
-This folder contains scripts and tutorials for converting PDFs to high-quality Markdown documents, optimized for:
+A CLI tool for converting PDFs to high-quality Markdown, optimized for:
 - **Claude AI** knowledge bases and agent sources
 - **Obsidian** vaults with proper image linking
-- **RAG pipelines** and document processing
+- **RAG pipelines** with chunked content
 
 ## Installation
 
+### From PyPI (when published)
 ```bash
-pip install docling docling-core
+pip install docling-converter
 ```
 
-## Quick Start
-
-### Single PDF Conversion
+### From GitHub
 ```bash
-python scripts/pdf_to_markdown.py /path/to/document.pdf
+pip install git+https://github.com/antonioinnovateops/docling_converter.git
 ```
 
-### Batch Conversion
+### From source
 ```bash
-python scripts/pdf_to_markdown.py --batch /path/to/pdf_folder /path/to/output
+git clone https://github.com/antonioinnovateops/docling_converter.git
+cd docling_converter
+pip install -e .
 ```
 
-## Folder Structure
-
+### Build wheel
+```bash
+pip install build
+python -m build
+pip install dist/docling_converter-0.1.0-py3-none-any.whl
 ```
-docling_tutorials/
-├── scripts/           # Conversion scripts
-│   ├── pdf_to_markdown.py      # Main converter
-│   ├── obsidian_formatter.py   # Obsidian-specific formatting
-│   └── claude_knowledge.py     # Claude knowledge base builder
-├── examples/          # Example notebooks and scripts
-├── output/            # Converted documents go here
-└── assets/            # Shared assets
+
+## CLI Usage
+
+### Basic PDF to Markdown
+
+```bash
+# Single file
+docling-converter convert document.pdf -o output/
+
+# Batch conversion
+docling-converter convert --batch /path/to/pdfs/ -o output/
+
+# With options
+docling-converter convert document.pdf -o output/ --no-ocr --image-scale 1.5
+```
+
+### Obsidian Vault Import
+
+```bash
+# Single file
+docling-converter obsidian document.pdf /path/to/vault/
+
+# Batch import
+docling-converter obsidian --batch /path/to/pdfs/ /path/to/vault/
+
+# With custom tags
+docling-converter obsidian document.pdf /path/to/vault/ --tags reference technical
+```
+
+### Claude Knowledge Base
+
+```bash
+# Single file with chunking
+docling-converter claude document.pdf -o knowledge/
+
+# Batch build knowledge base
+docling-converter claude --batch /path/to/pdfs/ -o knowledge/
+
+# Custom chunk size
+docling-converter claude document.pdf -o knowledge/ --chunk-size 500
+```
+
+## Python API
+
+```python
+from docling_converter import (
+    convert_pdf_to_markdown,
+    convert_for_obsidian,
+    convert_for_claude,
+    build_knowledge_base,
+)
+
+# Basic conversion
+md_path = convert_pdf_to_markdown("document.pdf", "output/")
+
+# Obsidian format
+md_path = convert_for_obsidian("document.pdf", "/path/to/vault/")
+
+# Claude knowledge base
+result = convert_for_claude("document.pdf", "knowledge/")
+print(f"Chunks: {result['num_chunks']}")
+
+# Build full knowledge base
+kb = build_knowledge_base("pdfs/", "knowledge/")
+print(f"Documents: {kb['documents']}")
 ```
 
 ## Output Structure
 
-Each converted PDF creates:
+### Basic Conversion
 ```
 output/
-├── document_name.md              # Main markdown file
-└── document_name_assets/         # Folder with images
+├── document.md                # Markdown file
+└── document_assets/           # Images folder
     ├── image_000.png
     ├── image_001.png
     └── ...
 ```
 
-Images use **relative paths** so the folder is portable.
-
-## Use Cases
-
-### 1. Claude Knowledge Base
-Convert technical documentation for Claude agents:
-```python
-from scripts.claude_knowledge import build_knowledge_base
-
-build_knowledge_base(
-    pdf_folder="/path/to/docs",
-    output_folder="/path/to/knowledge"
-)
+### Obsidian Format
+```
+vault/
+├── document.md                # With YAML frontmatter
+├── Imported Documents Index.md
+└── attachments/
+    └── document/
+        ├── document_img_000.png
+        └── ...
 ```
 
-### 2. Obsidian Vault
-Import PDFs into Obsidian with proper linking:
-```python
-from scripts.obsidian_formatter import convert_for_obsidian
-
-convert_for_obsidian(
-    pdf_path="/path/to/doc.pdf",
-    vault_path="/path/to/obsidian/vault"
-)
+### Claude Knowledge Base
 ```
-
-### 3. RAG Pipeline
-Process documents for retrieval-augmented generation:
-```python
-from docling.document_converter import DocumentConverter
-
-converter = DocumentConverter()
-result = converter.convert("document.pdf")
-
-# Get chunks for embedding
-chunks = result.document.export_to_markdown().split("\n\n")
+knowledge/
+├── INDEX.md                   # Master index
+├── document.md                # Full markdown
+├── document_chunks.json       # RAG-ready chunks
+├── document_metadata.json     # Document metadata
+└── document_assets/
+    └── ...
 ```
 
 ## Features
@@ -91,29 +136,19 @@ chunks = result.document.export_to_markdown().split("\n\n")
 - **OCR Support**: Extracts text from scanned documents
 - **Table Preservation**: Maintains table structure in markdown
 - **Image Extraction**: Saves images with relative paths
-- **Formula Support**: Converts LaTeX formulas
-- **Metadata Extraction**: Captures document metadata
+- **Chunking**: Splits documents for RAG/embedding pipelines
+- **Obsidian Compatible**: Wiki-style links and frontmatter
+- **Batch Processing**: Convert entire directories
 
-## Tips for Best Results
+## Command Reference
 
-1. **High-quality PDFs**: Vector PDFs convert better than scanned images
-2. **Enable OCR**: For scanned documents, OCR is automatic
-3. **Check images**: Some complex diagrams may need manual review
-4. **Tables**: Complex merged cells may need cleanup
-
-## Troubleshooting
-
-### Memory Issues
-For large PDFs (>100 pages), process in batches:
-```python
-pipeline_options.images_scale = 1.0  # Lower for memory
+```
+docling-converter --help
+docling-converter convert --help
+docling-converter obsidian --help
+docling-converter claude --help
 ```
 
-### Missing Images
-Ensure `generate_picture_images = True` in pipeline options.
+## License
 
-### OCR Quality
-For better OCR, install Tesseract:
-```bash
-apt-get install tesseract-ocr
-```
+MIT License
