@@ -54,6 +54,29 @@ Examples:
         default=2.0,
         help="Image scale factor (default: 2.0)",
     )
+    # PHASE 1-2: Mermaid diagram support
+    convert_parser.add_argument(
+        "--enable-diagram-classification",
+        action="store_true",
+        default=True,
+        help="Enable diagram type detection (Phase 1, default: enabled)",
+    )
+    convert_parser.add_argument(
+        "--no-diagram-classification",
+        action="store_true",
+        help="Disable diagram classification",
+    )
+    convert_parser.add_argument(
+        "--enable-mermaid",
+        action="store_true",
+        help="Convert detected diagrams to mermaid format (Phase 2)",
+    )
+    convert_parser.add_argument(
+        "--mermaid-format",
+        choices=["mermaid", "svg", "png"],
+        default="mermaid",
+        help="Mermaid output format (default: mermaid)",
+    )
 
     # Obsidian command
     obsidian_parser = subparsers.add_parser(
@@ -72,6 +95,17 @@ Examples:
     )
     obsidian_parser.add_argument(
         "--no-ocr", action="store_true", help="Disable OCR"
+    )
+    # PHASE 3: Obsidian mermaid support
+    obsidian_parser.add_argument(
+        "--with-mermaid",
+        action="store_true",
+        help="Create diagram notes in vault with mermaid (Phase 3)",
+    )
+    obsidian_parser.add_argument(
+        "--diagram-links",
+        action="store_true",
+        help="Create wiki-style links to diagram notes",
     )
 
     # Claude knowledge base command
@@ -93,6 +127,17 @@ Examples:
     )
     claude_parser.add_argument(
         "--no-ocr", action="store_true", help="Disable OCR"
+    )
+    # PHASE 2-3: Mermaid support for Claude KB
+    claude_parser.add_argument(
+        "--with-mermaid",
+        action="store_true",
+        help="Include mermaid diagrams in knowledge base chunks (Phase 2)",
+    )
+    claude_parser.add_argument(
+        "--extract-diagrams",
+        action="store_true",
+        help="Create separate diagram chunks for better retrieval (Phase 3)",
     )
 
     args = parser.parse_args()
@@ -119,15 +164,28 @@ Examples:
 def _handle_convert(args):
     """Handle convert command."""
     ocr = not args.no_ocr
+    # PHASE 1-2: Mermaid support
+    enable_diagram_classification = not args.no_diagram_classification
+    enable_mermaid = args.enable_mermaid if hasattr(args, 'enable_mermaid') else False
 
     if args.batch:
         results = batch_convert(
-            args.input, args.output, ocr=ocr, image_scale=args.image_scale
+            args.input,
+            args.output,
+            ocr=ocr,
+            image_scale=args.image_scale,
+            enable_diagram_classification=enable_diagram_classification,
+            enable_mermaid=enable_mermaid,
         )
         print(f"\nConverted {len(results)} documents")
     else:
         result = convert_pdf_to_markdown(
-            args.input, args.output, ocr=ocr, image_scale=args.image_scale
+            args.input,
+            args.output,
+            ocr=ocr,
+            image_scale=args.image_scale,
+            enable_diagram_classification=enable_diagram_classification,
+            enable_mermaid=enable_mermaid,
         )
         print(f"\nOutput: {result}")
 
@@ -136,10 +194,17 @@ def _handle_obsidian(args):
     """Handle obsidian command."""
     ocr = not args.no_ocr
     add_frontmatter = not args.no_frontmatter
+    # PHASE 3: Mermaid support for Obsidian
+    with_mermaid = args.with_mermaid if hasattr(args, 'with_mermaid') else False
+    diagram_links = args.diagram_links if hasattr(args, 'diagram_links') else False
 
     if args.batch:
         results = batch_import_to_vault(
-            args.input, args.vault, tags=args.tags, ocr=ocr
+            args.input,
+            args.vault,
+            tags=args.tags,
+            ocr=ocr,
+            enable_mermaid=with_mermaid,
         )
         print(f"\nImported {len(results)} documents to vault")
     else:
@@ -149,6 +214,8 @@ def _handle_obsidian(args):
             add_frontmatter=add_frontmatter,
             tags=args.tags,
             ocr=ocr,
+            enable_mermaid=with_mermaid,
+            diagram_links=diagram_links,
         )
         print(f"\nOutput: {result}")
 
@@ -156,16 +223,29 @@ def _handle_obsidian(args):
 def _handle_claude(args):
     """Handle claude command."""
     ocr = not args.no_ocr
+    # PHASE 2-3: Mermaid support for Claude KB
+    with_mermaid = args.with_mermaid if hasattr(args, 'with_mermaid') else False
+    extract_diagrams = args.extract_diagrams if hasattr(args, 'extract_diagrams') else False
 
     if args.batch:
         results = build_knowledge_base(
-            args.input, args.output, chunk_size=args.chunk_size, ocr=ocr
+            args.input,
+            args.output,
+            chunk_size=args.chunk_size,
+            ocr=ocr,
+            enable_mermaid=with_mermaid,
+            extract_diagram_chunks=extract_diagrams,
         )
         print(f"\nBuilt knowledge base with {results.get('documents', 0)} documents")
         print(f"Index: {results.get('index_path', '')}")
     else:
         result = convert_for_claude(
-            args.input, args.output, chunk_size=args.chunk_size, ocr=ocr
+            args.input,
+            args.output,
+            chunk_size=args.chunk_size,
+            ocr=ocr,
+            enable_mermaid=with_mermaid,
+            extract_diagram_chunks=extract_diagrams,
         )
         print(f"\nOutput: {result['markdown_path']}")
         print(f"Chunks: {result['num_chunks']}")
